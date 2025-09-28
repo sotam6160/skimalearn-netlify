@@ -1,3 +1,5 @@
+// public/app.js（① クリックでYouTubeを開く対応のみ）
+
 const view = document.getElementById("view");
 const T = (id) => document.getElementById(id).content.cloneNode(true);
 
@@ -5,21 +7,24 @@ document.getElementById("nav-preferences").onclick = renderPreferences;
 document.getElementById("nav-feed").onclick = renderFeed;
 document.getElementById("nav-history").onclick = renderHistory;
 
-// 初期ルーティング
+// 初期表示
 renderFeed();
 
 function getPrefs() {
   const country = localStorage.getItem("country") || "JP";
   const tags = (localStorage.getItem("usualTags") || "マーケ, 広告, ビジネス")
     .split(",")
-    .map(s => s.trim())
+    .map((s) => s.trim())
     .filter(Boolean);
   return { country, usualTags: tags };
 }
 
 function setPrefs({ country, usualTags }) {
   localStorage.setItem("country", country || "JP");
-  localStorage.setItem("usualTags", (usualTags && usualTags.length ? usualTags : ["マーケ","広告","ビジネス"]).join(", "));
+  localStorage.setItem(
+    "usualTags",
+    (usualTags && usualTags.length ? usualTags : ["マーケ", "広告", "ビジネス"]).join(", ")
+  );
 }
 
 function renderPreferences() {
@@ -33,13 +38,17 @@ function renderPreferences() {
 
   document.getElementById("save-prefs").onclick = () => {
     const newCountry = (country.value || "JP").toUpperCase();
-    const newTags = (tags.value || "マーケ, 広告, ビジネス").split(",").map(s => s.trim()).filter(Boolean);
+    const newTags = (tags.value || "マーケ, 広告, ビジネス")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
     setPrefs({ country: newCountry, usualTags: newTags });
     alert("保存しました");
   };
 }
 
 async function fetchTrending() {
+  // Netlify Functions 経由
   const res = await fetch("/.netlify/functions/trending");
   if (!res.ok) throw new Error("trending failed");
   const json = await res.json();
@@ -47,14 +56,17 @@ async function fetchTrending() {
 }
 
 function scoreVideos(items, usualTags) {
-  const lcTags = usualTags.map(t => t.toLowerCase());
-  const cleaned = items.map(it => {
+  // スコア：一致数が多い = 普段寄り → 下位
+  const lcTags = usualTags.map((t) => t.toLowerCase());
+  const cleaned = items.map((it) => {
     const title = it?.snippet?.title || "";
     const desc = it?.snippet?.description || "";
     const channel = it?.snippet?.channelTitle || "";
     const hay = (title + " " + desc + " " + channel).toLowerCase();
     let matches = 0;
-    lcTags.forEach(t => { if (hay.includes(t)) matches += 1; });
+    lcTags.forEach((t) => {
+      if (hay.includes(t)) matches += 1;
+    });
     return { it, matches };
   });
 
@@ -62,12 +74,14 @@ function scoreVideos(items, usualTags) {
   const seenChannel = new Set();
 
   cleaned
-    .sort((a, b) => a.matches - b.matches)
+    .sort((a, b) => a.matches - b.matches) // 少ない順＝外れ値
     .forEach(({ it, matches }) => {
       const ch = it?.snippet?.channelTitle || "";
       if (seenChannel.has(ch)) return;
-      const key = ((it?.snippet?.title || "").split(/[^\p{L}\p{N}]+/u)[0] || "").toLowerCase();
-      if (picked.some(p => p.key === key)) return;
+      // タイトル先頭語での簡易重複回避
+      const key =
+        ((it?.snippet?.title || "").split(/[^\p{L}\p{N}]+/u)[0] || "").toLowerCase();
+      if (picked.some((p) => p.key === key)) return;
 
       picked.push({ it, key, matches });
       seenChannel.add(ch);
@@ -75,6 +89,7 @@ function scoreVideos(items, usualTags) {
 
   return picked.slice(0, 5).map(({ it, matches }) => ({
     id: it.id,
+    url: `https://www.youtube.com/watch?v=${it.id}`, // ← 追加：YouTubeの視聴URL
     title: it.snippet.title,
     channel: it.snippet.channelTitle,
     thumb: it.snippet.thumbnails?.high?.url || "",
@@ -110,14 +125,14 @@ async function renderFeed() {
       const top5 = scoreVideos(items, usualTags);
 
       cards.innerHTML = "";
-      top5.forEach(v => cards.appendChild(videoCard(v, usualTags)));
+      top5.forEach((v) => cards.appendChild(videoCard(v, usualTags)));
     } catch (e) {
       cards.innerHTML = `<p>失敗しました。<button id="use-mock">擬似データで表示</button></p>`;
       document.getElementById("use-mock").onclick = async () => {
         const items = await fetchTrending();
         const top5 = scoreVideos(items, usualTags);
         cards.innerHTML = "";
-        top5.forEach(v => cards.appendChild(videoCard(v, usualTags)));
+        top5.forEach((v) => cards.appendChild(videoCard(v, usualTags)));
       };
     }
   }
@@ -130,13 +145,20 @@ function videoCard(v, usualTags) {
   const el = document.createElement("div");
   el.className = "card";
   el.innerHTML = `
-    <img src="${v.thumb}" alt="">
+    <a href="${v.url}" target="_blank" rel="noopener">
+      <img src="${v.thumb}" alt="">
+    </a>
     <div class="body">
-      <div class="title">${escapeHtml(v.title)}</div>
+      <div class="title">
+        <a href="${v.url}" target="_blank" rel="noopener">${escapeHtml(v.title)}</a>
+      </div>
       <div class="desc">${escapeHtml(v.description)}</div>
-      <div class="meta">${escapeHtml(v.channel)}　${v.viewCount ? `・${Number(v.viewCount).toLocaleString()}回視聴` : ""}</div>
+      <div class="meta">${escapeHtml(v.channel)}　${
+        v.viewCount ? `・${Number(v.viewCount).toLocaleString()}回視聴` : ""
+      }</div>
       <div class="badge">${escapeHtml(v.reason)}</div>
       <div style="margin-top:8px;">
+        <a class="play" href="${v.url}" target="_blank" rel="noopener" style="margin-right:6px;">▶︎ 再生</a>
         <button class="gen">学び生成</button>
       </div>
       <div class="insight" hidden></div>
@@ -162,6 +184,7 @@ function videoCard(v, usualTags) {
       const json = await res.json();
       out.textContent = json.text || "（結果なし）";
       out.hidden = false;
+      // Historyへ保存（ローカル保存のMVP）
       saveHistory({ video: v, text: json.text });
     } catch {
       out.textContent = "エラー。もう一度お試しください。";
@@ -174,7 +197,9 @@ function videoCard(v, usualTags) {
   return el;
 }
 
-function escapeHtml(s){ return (s||"").replace(/[&<>"']/g,m=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;" }[m])); }
+function escapeHtml(s) {
+  return (s || "").replace(/[&<>"']/g, (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[m]));
+}
 
 function saveHistory({ video, text }) {
   const rec = {
@@ -200,13 +225,17 @@ function renderHistory() {
     box.innerHTML = "<p>まだ履歴がありません。</p>";
     return;
   }
-  arr.forEach(h => {
+  arr.forEach((h) => {
     const el = document.createElement("div");
     el.className = "card";
     el.innerHTML = `
-      <img src="${h.thumb}" alt="">
+      <a href="https://www.youtube.com/watch?v=${h.id}" target="_blank" rel="noopener">
+        <img src="${h.thumb}" alt="">
+      </a>
       <div class="body">
-        <div class="title">${escapeHtml(h.title)}</div>
+        <div class="title">
+          <a href="https://www.youtube.com/watch?v=${h.id}" target="_blank" rel="noopener">${escapeHtml(h.title)}</a>
+        </div>
         <div class="meta">${escapeHtml(h.channel)}</div>
         <div class="badge">${escapeHtml(h.reason)}</div>
         <div class="insight">${escapeHtml(h.text)}</div>
