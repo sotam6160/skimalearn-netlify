@@ -21,14 +21,43 @@
   <template id="tpl-preferences">
     <section class="panel">
       <h2>Preferences</h2>
+
       <label>居住国
         <input id="country" placeholder="JP" />
       </label>
+
       <label>よく観るタグ（カンマ区切り）
         <input id="tags" placeholder="マーケ, 広告, ビジネス" />
       </label>
+
+      <hr style="border-color:#222">
+
+      <h3>表示条件</h3>
+
+      <label>トレンドの期間（新しさ）
+        <select id="windowDays">
+          <option value="1">24時間以内</option>
+          <option value="3">3日以内</option>
+          <option value="7" selected>7日以内</option>
+          <option value="30">30日以内</option>
+          <option value="0">指定なし（全期間）</option>
+        </select>
+      </label>
+
+      <label><input type="checkbox" id="allowGambling" checked> ギャンブル系もOK</label>
+      <label><input type="checkbox" id="allowClickbait" checked> 釣りタイトルもOK</label>
+
+      <div class="row">
+        <label style="flex:1;">短すぎカット（下限 秒）
+          <input id="minSec" type="number" min="0" placeholder="0" />
+        </label>
+        <label style="flex:1;">長すぎカット（上限 分）
+          <input id="maxMin" type="number" min="0" placeholder="30" />
+        </label>
+      </div>
+
       <button id="save-prefs">保存</button>
-      <p class="hint">未入力時は 国=JP / タグ=マーケ,広告,ビジネス を自動設定</p>
+      <p class="hint">未入力時は 国=JP / タグ=マーケ,広告,ビジネス / 期間=7日 / ギャンブルOK / 釣りOK / 長さカットなし</p>
     </section>
   </template>
 
