@@ -1,13 +1,9 @@
 // netlify/functions/insight.js
-export default async (event) => {
+export async function handler(event) {
   const OPENAI_KEY = process.env.OPENAI_API_KEY || "";
 
-  let body;
-  try {
-    body = JSON.parse(event.body || "{}");
-  } catch {
-    body = {};
-  }
+  let body = {};
+  try { body = JSON.parse(event.body || "{}"); } catch {}
 
   const {
     usualTags = ["マーケ", "広告", "ビジネス"],
@@ -20,7 +16,7 @@ export default async (event) => {
   const prompt = buildPrompt({ usualTags, title, channel, description, why });
 
   if (!OPENAI_KEY) {
-    return ok({ text: mockInsight(prompt) });
+    return json({ text: mockInsight() });
   }
 
   try {
@@ -39,15 +35,14 @@ export default async (event) => {
         ]
       })
     });
-
-    if (!res.ok) throw new Error(`LLM error ${res.status}`);
-    const json = await res.json();
-    const text = json?.choices?.[0]?.message?.content ?? mockInsight(prompt);
-    return ok({ text });
+    if (!res.ok) throw new Error("LLM error");
+    const jsonRes = await res.json();
+    const text = jsonRes?.choices?.[0]?.message?.content ?? mockInsight();
+    return json({ text });
   } catch {
-    return ok({ text: mockInsight(prompt) });
+    return json({ text: mockInsight() });
   }
-};
+}
 
 function buildPrompt({ usualTags, title, channel, description, why }) {
   return `
@@ -62,7 +57,7 @@ function buildPrompt({ usualTags, title, channel, description, why }) {
 - 普段の私のタグ：${usualTags.join(", ")}
 - 今回の動画タイトル：${title}
 - チャンネル名：${channel}
-- 説明（要約可）：${(description||"").slice(0, 500)}
+- 説明（要約可）：${(description || "").slice(0, 500)}
 - これが“いつもの外”な理由：${why}
 
 出力フォーマット：
@@ -77,11 +72,12 @@ function buildPrompt({ usualTags, title, channel, description, why }) {
 `.trim();
 }
 
-function ok(obj) {
-  return new Response(JSON.stringify(obj), {
-    headers: { "content-type": "application/json", "cache-control": "no-store" },
-    status: 200
-  });
+function json(obj) {
+  return {
+    statusCode: 200,
+    headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
+    body: JSON.stringify(obj)
+  };
 }
 
 function mockInsight() {
