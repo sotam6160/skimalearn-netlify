@@ -1,10 +1,9 @@
 // netlify/functions/trending.js
-export default async () => {
+export async function handler(event) {
   const YT_KEY = process.env.YOUTUBE_API_KEY || "";
+  const country = "JP"; // 必要なら "US" などに変更OK
+
   const url = new URL("https://www.googleapis.com/youtube/v3/videos");
-
-  const country = "JP"; // 必要に応じて変更。クライアントから渡す場合はevent.queryStringParametersを使用。
-
   const params = {
     chart: "mostPopular",
     regionCode: country,
@@ -16,24 +15,29 @@ export default async () => {
 
   let data;
   if (!YT_KEY) {
-    data = await importMock();
+    data = mock();
   } else {
     try {
       const res = await fetch(url.toString());
-      if (!res.ok) throw new Error(`YouTube API error ${res.status}`);
+      if (!res.ok) throw new Error("YouTube API error");
       data = await res.json();
-    } catch (e) {
-      data = await importMock();
+    } catch {
+      data = mock();
     }
   }
 
-  return new Response(JSON.stringify(data), {
-    headers: { "content-type": "application/json", "cache-control": "no-store" },
-    status: 200
-  });
-};
+  return json(data);
+}
 
-async function importMock() {
+function json(obj) {
+  return {
+    statusCode: 200,
+    headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
+    body: JSON.stringify(obj)
+  };
+}
+
+function mock() {
   return {
     items: [
       {
