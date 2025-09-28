@@ -1,4 +1,4 @@
-// public/app.js（① クリックでYouTubeを開く対応のみ）
+// public/app.js（① クリック再生＋C/D 興味なし機能 版）
 
 const view = document.getElementById("view");
 const T = (id) => document.getElementById(id).content.cloneNode(true);
@@ -48,7 +48,6 @@ function renderPreferences() {
 }
 
 async function fetchTrending() {
-  // Netlify Functions 経由
   const res = await fetch("/.netlify/functions/trending");
   if (!res.ok) throw new Error("trending failed");
   const json = await res.json();
@@ -56,19 +55,23 @@ async function fetchTrending() {
 }
 
 function scoreVideos(items, usualTags) {
-  // スコア：一致数が多い = 普段寄り → 下位
+  // D) 興味なしにしたチャンネルを除外
+  const blockedChannels = JSON.parse(localStorage.getItem("blockedChannels") || "[]");
+
   const lcTags = usualTags.map((t) => t.toLowerCase());
-  const cleaned = items.map((it) => {
-    const title = it?.snippet?.title || "";
-    const desc = it?.snippet?.description || "";
-    const channel = it?.snippet?.channelTitle || "";
-    const hay = (title + " " + desc + " " + channel).toLowerCase();
-    let matches = 0;
-    lcTags.forEach((t) => {
-      if (hay.includes(t)) matches += 1;
+  const cleaned = items
+    .filter((it) => !blockedChannels.includes(it?.snippet?.channelTitle || ""))
+    .map((it) => {
+      const title = it?.snippet?.title || "";
+      const desc = it?.snippet?.description || "";
+      const channel = it?.snippet?.channelTitle || "";
+      const hay = (title + " " + desc + " " + channel).toLowerCase();
+      let matches = 0;
+      lcTags.forEach((t) => {
+        if (hay.includes(t)) matches += 1;
+      });
+      return { it, matches };
     });
-    return { it, matches };
-  });
 
   const picked = [];
   const seenChannel = new Set();
@@ -89,7 +92,7 @@ function scoreVideos(items, usualTags) {
 
   return picked.slice(0, 5).map(({ it, matches }) => ({
     id: it.id,
-    url: `https://www.youtube.com/watch?v=${it.id}`, // ← 追加：YouTubeの視聴URL
+    url: `https://www.youtube.com/watch?v=${it.id}`, // クリックで再生
     title: it.snippet.title,
     channel: it.snippet.channelTitle,
     thumb: it.snippet.thumbnails?.high?.url || "",
@@ -159,11 +162,24 @@ function videoCard(v, usualTags) {
       <div class="badge">${escapeHtml(v.reason)}</div>
       <div style="margin-top:8px;">
         <a class="play" href="${v.url}" target="_blank" rel="noopener" style="margin-right:6px;">▶︎ 再生</a>
+        <button class="skip" style="margin-right:6px;">興味なし</button>
         <button class="gen">学び生成</button>
       </div>
       <div class="insight" hidden></div>
     </div>
   `;
+
+  // C) 「興味なし」押下でチャンネルをブロック
+  const skip = el.querySelector(".skip");
+  skip.onclick = () => {
+    const arr = JSON.parse(localStorage.getItem("blockedChannels") || "[]");
+    if (!arr.includes(v.channel)) {
+      arr.push(v.channel);
+      localStorage.setItem("blockedChannels", JSON.stringify(arr));
+    }
+    el.remove(); // 画面から即消す（次回はDで除外される）
+  };
+
   const btn = el.querySelector(".gen");
   const out = el.querySelector(".insight");
   btn.onclick = async () => {
@@ -184,7 +200,6 @@ function videoCard(v, usualTags) {
       const json = await res.json();
       out.textContent = json.text || "（結果なし）";
       out.hidden = false;
-      // Historyへ保存（ローカル保存のMVP）
       saveHistory({ video: v, text: json.text });
     } catch {
       out.textContent = "エラー。もう一度お試しください。";
